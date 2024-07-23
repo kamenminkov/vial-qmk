@@ -14,15 +14,18 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include QMK_KEYBOARD_H
-
-#include "rev1.h"
-
-#include "spi_master.h"
-#include "matrix.h"
+#include "action_layer.h"
 #include "keyboard.h"
-
+#include "matrix.h"
 #include "myriad.h"
+#include "oled_driver.h"
+#include "progmem.h"
+#include "quantum.h"
+#include "rev1.h"
+#include "rgb_matrix_types.h"
+#include "spi_master.h"
+#include "splitkb/elora/rev1/config.h"
+#include QMK_KEYBOARD_H
 
 // Needed for early boot
 #include "hardware/xosc.h"
@@ -41,18 +44,18 @@ static void enter_standby_mode(void) {
         // - deinit PLL
         // - MEMPOWERDOWN
         // - QSPI power-down (idle use is 10-50 uA)
-    
+
         // The RP2040 *should* be able to power-down to about 180uA,
         // while the QSPI chip can do 1-15 uA.
-    
+
         // Additional 3V3 power usage which can't be disabled:
         // - Matrix SPI NOT gate: 0.1-4 uA
         // - Matrix SPI tri-state buffer: 0.1-10 uA
         // - Shift registers: 5x 0.1-2 uA
-    
+
         // Turns off the crystal oscillator until the core is woken by an interrupt.
         // This will block and hence the entire system will stop, until an interrupt wakes it up.
-        // This function will continue to block until the oscillator becomes stable after its wakeup. 
+        // This function will continue to block until the oscillator becomes stable after its wakeup.
         xosc_dormant();
     }
 }
@@ -89,12 +92,11 @@ void keyboard_pre_init_kb(void) {
     // We have to get the SPI interface working quite early,
     // So make sure it is available well before we need it
     spi_init();
-    
+
     keyboard_pre_init_user();
 }
 
 void keyboard_post_init_kb(void) {
-
     keyboard_post_init_user();
 }
 
@@ -120,8 +122,8 @@ void matrix_init_custom(void) {
 
 bool matrix_scan_custom(matrix_row_t current_matrix[]) {
     // Enough to hold the shift registers
-    uint16_t length = 5;
-    uint8_t data[length];
+    uint16_t     length = 5;
+    uint8_t      data[length];
     spi_status_t res;
 
     // Matrix SPI config
@@ -148,14 +150,14 @@ bool matrix_scan_custom(matrix_row_t current_matrix[]) {
         matrix_has_changed |= current_matrix[i] ^ word;
         current_matrix[i] = word;
     }
-    #ifdef MYRIAD_ENABLE
+#ifdef MYRIAD_ENABLE
     // It's a bit of a weird place to call a `_task`,
     // but we want to do it relatively early because we mess with a lot of functionality
     myriad_task();
     return matrix_has_changed || myriad_hook_matrix(current_matrix);
-    #else
+#else
     return matrix_has_changed;
-    #endif
+#endif
 }
 
 //// Encoder functionality
@@ -171,7 +173,7 @@ void encoder_read_pads_from(bool pads[], matrix_row_t mat[]) {
     // First two matrix rows:
     //
     // Pin  A   B   C   D   E   F   G   H
-    // Left: 
+    // Left:
     //   { __, __, __, __, __, __, A1, B1 },
     //   { A3, B3, A2, B2, __, __, __, __ }
     // Right:
@@ -209,23 +211,23 @@ void encoder_init_pads(uint8_t count, bool pads[]) {
     // Make sure the Myriad pads are in a well-defined state
     pads[6] = 0;
     pads[7] = 0;
-    #ifdef MYRIAD_ENABLE
+#ifdef MYRIAD_ENABLE
     myriad_hook_encoder(count, pads);
-    #endif
+#endif
 }
 
 extern matrix_row_t raw_matrix[MATRIX_ROWS]; // From quantum/matrix_common.c
-void encoder_read_pads(uint8_t count, bool pads[]) {
-    // The matrix code already keeps the raw matrix up-to-date,
+void                encoder_read_pads(uint8_t count, bool pads[]) {
+                   // The matrix code already keeps the raw matrix up-to-date,
     // so we only have to read the values from it
     encoder_read_pads_from(pads, raw_matrix);
 
     // Make sure the Myriad pads are in a well-defined state
     pads[6] = 0;
     pads[7] = 0;
-    #ifdef MYRIAD_ENABLE
+#ifdef MYRIAD_ENABLE
     myriad_hook_encoder(count, pads);
-    #endif
+#endif
 }
 
 //// Default functionality
@@ -233,7 +235,7 @@ void encoder_read_pads(uint8_t count, bool pads[]) {
 // RGB Matrix definition for Elora
 #ifdef RGB_MATRIX_ENABLE
 
-#define NLD NO_LED
+#    define NLD NO_LED
 
 // Layout
 //     2                          1                            0                  6                            7                          8
@@ -259,43 +261,47 @@ void encoder_read_pads(uint8_t count, bool pads[]) {
 //     NLD NLD NLD NLD NLD          NLD NLD NLD NLD NLD
 // )
 
+led_config_t g_led_config = {{
+                                 // COL  01   02   03   04   05   011   010   09    ROW
+                                 {5, NLD, NLD, NLD, 5, 5, NLD, NLD},       // 00
+                                 {NLD, NLD, NLD, NLD, 5, 4, 4, 3},         // 01
+                                 {1, 1, 0, 0, 0, 4, 4, 4},                 // 02
+                                 {2, 2, 1, 1, 4, 4, 3, 3},                 // 03
+                                 {2, 2, 2, 2, 3, 3, 3, 3},                 // 04
+                                 {NLD, NLD, NLD, NLD, NLD, NLD, NLD, NLD}, // 05
 
-led_config_t g_led_config = { 
-    {
-    //COL  01   02   03   04   05   011   010   09    ROW
-        {   5, NLD, NLD, NLD,   5,   5, NLD, NLD }, // 00
-        { NLD, NLD, NLD, NLD,   5,   4,   4,   3 }, // 01
-        {   1,   1,   0,   0,   0,   4,   4,   4 }, // 02
-        {   2,   2,   1,   1,   4,   4,   3,   3 }, // 03
-        {   2,   2,   2,   2,   3,   3,   3,   3 }, // 04
-        { NLD, NLD, NLD, NLD, NLD, NLD, NLD, NLD }, // 05
-
-        { NLD, NLD,  11,  11, NLD, NLD, NLD,  11 }, // 06
-        {   9,  10,  10,  11, NLD, NLD, NLD, NLD }, // 07
-        {   10, 10,  10,   6,   6,   6,   7,   7,}, // 08
-        {   9,   9,  10,  10,   7,   7,   8,   8 }, // 09
-        {   9,   9,   9,   9,   8,   8,   8,   8 }, // 10
-        { NLD, NLD, NLD, NLD, NLD, NLD, NLD, NLD }, // 11
-    }, 
-    {
-        // { 112, 32 } is the center
-        {90 , 0},  // 0
-        {45 , 0},  // 1
-        {0  , 0},  // 2
-        {0  , 64}, // 3
-        {45 , 64}, // 4
-        {90 , 64}, // 5
-        {134, 0},  // 6
-        {179, 0},  // 7
-        {224, 0},  // 8
-        {224, 64}, // 9
-        {179, 64}, // 10
-        {134, 64}   // 11
-    }, 
-    {
-        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
-    } 
-};
+                                 {NLD, NLD, 11, 11, NLD, NLD, NLD, 11}, // 06
+                                 {9, 10, 10, 11, NLD, NLD, NLD, NLD},   // 07
+                                 {
+                                     10,
+                                     10,
+                                     10,
+                                     6,
+                                     6,
+                                     6,
+                                     7,
+                                     7,
+                                 },                                        // 08
+                                 {9, 9, 10, 10, 7, 7, 8, 8},               // 09
+                                 {9, 9, 9, 9, 8, 8, 8, 8},                 // 10
+                                 {NLD, NLD, NLD, NLD, NLD, NLD, NLD, NLD}, // 11
+                             },
+                             {
+                                 // { 112, 32 } is the center
+                                 {90, 0},   // 0
+                                 {45, 0},   // 1
+                                 {0, 0},    // 2
+                                 {0, 64},   // 3
+                                 {45, 64},  // 4
+                                 {90, 64},  // 5
+                                 {134, 0},  // 6
+                                 {179, 0},  // 7
+                                 {224, 0},  // 8
+                                 {224, 64}, // 9
+                                 {179, 64}, // 10
+                                 {134, 64}  // 11
+                             },
+                             {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
 #endif
 
 #ifdef OLED_ENABLE
@@ -315,7 +321,7 @@ bool oled_task_kb(void) {
     if (!is_oled_enabled) {
         oled_off();
         return false;
-    } else  {
+    } else {
         oled_on();
     }
 
@@ -345,7 +351,7 @@ bool oled_task_kb(void) {
             0xaa,0xab,0xac,0xad,0xae,0xaf,0xb0,0xb1,0xb2,0xb3,0x00
         };
         // clang-format on
-        oled_set_cursor(0, oled_max_lines()-5);
+        oled_set_cursor(0, oled_max_lines() - 5);
         oled_write_P(qmk_logo, false);
     } else {
         // Elora sigil
@@ -353,11 +359,11 @@ bool oled_task_kb(void) {
         static const char PROGMEM elora_logo[] = {
             0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,128,128,192,224,224,240,248,120, 56, 60,188,158,158,222,206,207,207,207,239,239,239,239,239,239,207,207,207,206,222,158,158,188, 60, 56,120,248,240,224,224,192,128,128,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,192,224,248,252,126, 31,143,199,227,243,249,124, 60, 30, 31, 15,  7,  7,  3,  3,  3,131,193,225,241,249,253,255,255,255,255,127, 63, 31, 15,  7,  7,  7,143,223,254,252,252,249,243,227,199,143, 31,126,252,248,224,192,  0,  0,  0,  0,  0,
             0,192,240,254,255, 63,  7,227,248,252,127, 31, 15,  3,  1,  0,  0,  0,128,192,224,240,248,252,254,255,255,255,127, 63, 31, 15,  7,  3,  1,128,192,224,240,248,252,254,255,255,255,255,127, 63, 31, 15,  7, 15, 31,255,252,248,227,  7, 63,255,254,240,192,  0,252,255,255,255,  1,224,255,255,255,  7,  0,  0,  0,  0,  0,  0,  0,  0, 31, 31, 31, 31, 31, 15,  7,  3,  1,  0,  0,  0,240,248,252,254,255,255,255,255,127, 63, 31, 15,  7,  3,  1,128,192,224,240,248,252,254,255,255,255,255,255,255,224,  1,255,255,255,252,
-            63,255,255,255,128,  7,255,255,255,224,  0,  0,  0,  0,  0,  0,  0,  0,  0,128,192,224,240,248,248,248,248,248,248,  0,  3,  3,  3,  3,  3,  3,  1,128,192,224,240,248,252,254,255,255,255,127, 63, 31, 15,  7,  3,  1,224,255,255,255,  7,128,255,255,255, 63,  0,  3, 15,127,255,252,224,199, 31, 63,254,248,240,192,128,  0,  0,  0,  0, 31, 31, 31, 31, 31, 31, 15,  7,  3,  1,  0,  0,  0,  0,  0,  0, 62, 63, 63, 63, 63, 63, 31, 15,  7,  3,  1,  0,  0,  0,128,192,240,248,254, 63, 31,199,224,252,255,127, 15,  3,  0, 
+            63,255,255,255,128,  7,255,255,255,224,  0,  0,  0,  0,  0,  0,  0,  0,  0,128,192,224,240,248,248,248,248,248,248,  0,  3,  3,  3,  3,  3,  3,  1,128,192,224,240,248,252,254,255,255,255,127, 63, 31, 15,  7,  3,  1,224,255,255,255,  7,128,255,255,255, 63,  0,  3, 15,127,255,252,224,199, 31, 63,254,248,240,192,128,  0,  0,  0,  0, 31, 31, 31, 31, 31, 31, 15,  7,  3,  1,  0,  0,  0,  0,  0,  0, 62, 63, 63, 63, 63, 63, 31, 15,  7,  3,  1,  0,  0,  0,128,192,240,248,254, 63, 31,199,224,252,255,127, 15,  3,  0,
             0,  0,  0,  0,  0,  3,  7, 31, 63,126,248,241,227,199,207,159, 62, 60,120,248,240,224,224,192,192,192,192,128,128,128,128,128,128,128,128,128,128,192,192,192,192,224,224,240,248,120, 60, 62,159,207,199,227,241,248,126, 63, 31,  7,  3,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  1,  3,  7,  7, 15, 31, 30, 28, 60, 61,121,121,123,115,243,243,243,247,247,247,247,247,247,243,243,243,115,123,121,121, 61, 60, 28, 30, 31, 15,  7,  7,  3,  1,  1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
         };
         // clang-format on
-        oled_set_cursor(0, (oled_max_lines()/2)-4); // logo is 8 lines high, so center vertically
+        oled_set_cursor(0, (oled_max_lines() / 2) - 4); // logo is 8 lines high, so center vertically
         oled_write_raw_P(elora_logo, sizeof(elora_logo));
     }
 
