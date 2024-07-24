@@ -14,16 +14,19 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "rgb_matrix.h"
-#include QMK_KEYBOARD_H
 #include "action_layer.h"
 #include "bitwise.h"
 #include "encoder.h"
 #include "keycodes.h"
+#include "pointing_device/pointing_device_auto_mouse.h"
 #include "quantum_keycodes.h"
-#include "splitkb/elora/rev1/rev1.h"
-#include "splitkb/elora/rev1/config.h"
+#include "report.h"
 #include "config.h"
+#include "quantum.h"
+#include "rgb_matrix.h"
+#include "splitkb/elora/rev1/config.h"
+#include "splitkb/elora/rev1/rev1.h"
+#include QMK_KEYBOARD_H
 
 enum layers {
     _QWERTY = 0,
@@ -43,6 +46,14 @@ enum layers {
 #define CTL_MINS MT(MOD_RCTL, KC_MINUS)
 #define ALT_ENT MT(MOD_LALT, KC_ENT)
 
+enum custom_keycodes {
+    DRAG_SCROLL = QK_KB_0,
+};
+
+void pointing_device_init_user(void) {
+    set_auto_mouse_enable(true);
+}
+
 // clang-format off
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     [_QWERTY] = LAYOUT_myr(
@@ -56,11 +67,11 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     ),
 
     [_NAV] = LAYOUT_myr(
-      KC_F1  , KC_F2  , KC_F3  , KC_F4  , KC_F5  , KC_F6      ,          _______, _______,          KC_F7  , KC_F8  , KC_F9  , KC_F10 , KC_F11 , KC_F12,
-      _______, _______, KC_MPLY, _______, _______, _______    ,          _______, _______,          _______, KC_HOME, KC_UP,   KC_END,  KC_PGUP, _______,
-      _______, _______, _______, KC_DEL , _______, _______    ,          _______, _______,          KC_BSPC, KC_LEFT, KC_DOWN, KC_RGHT, KC_PGDN, _______,
-      _______, KC_APP , _______, _______, _______, _______    , _______, _______, _______, _______, _______, _______, _______, _______, _______, RGB_TOG,
-                                 _______, _______, TO(_QWERTY), _______, _______, _______, _______, _______, TO(_NUM), _______,
+      KC_F1  , KC_F2  , KC_F3  , KC_F4  , KC_F5  , KC_F6      ,           _______, _______,          KC_F7  , KC_F8  , KC_F9  , KC_F10 , KC_F11 , KC_F12,
+      _______, _______, KC_MPLY, _______, _______, _______    ,           _______, _______,          _______, KC_HOME, KC_UP,   KC_END,  KC_PGUP, _______,
+      _______, _______, _______, KC_DEL , _______, DRAG_SCROLL,           _______, _______,          KC_BSPC, KC_LEFT, KC_DOWN, KC_RGHT, KC_PGDN, _______,
+      _______, KC_APP , _______, _______, _______, MO(_RGB)   , _______ , _______, _______, _______, _______, _______, _______, _______, _______, RGB_TOG,
+                                 _______, _______, TO(_QWERTY), MO(_NUM), _______, _______, _______, _______, TO(_NUM), _______,
 
       _______, _______, _______, _______,          _______,                   _______, _______, _______, _______,          _______
     ),
@@ -69,7 +80,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
       _______, _______, _______, _______, _______, _______    ,          _______, _______,          _______, _______ , _______, _______, _______   , _______,
       _______,  KC_F1 ,  KC_F2 ,  KC_F3 ,  KC_F4 , _______    ,          _______, _______,          _______, KC_7    , KC_8   , KC_9   , KC_KP_PLUS, _______,
       _______,  KC_F5 ,  KC_F6 ,  KC_F7 ,  KC_F8 , _______    ,          _______, _______,          _______, KC_4    , KC_5   , KC_6   , _______   , _______,
-      _______,  KC_F9 ,  KC_F10,  KC_F11,  KC_F12, _______    , _______, _______, _______, _______, _______, KC_1    , KC_2   , KC_3   , _______   , _______,
+      _______,  KC_F9 ,  KC_F10,  KC_F11,  KC_F12, MO(_RGB)   , _______, _______, _______, _______, _______, KC_1    , KC_2   , KC_3   , _______   , _______,
                                  _______, _______, TO(_QWERTY), _______, _______, _______, _______, KC_0   , TO(_RGB), _______,
 
       _______, _______, _______, _______,          _______,                   _______, _______, _______, _______,          _______
@@ -108,6 +119,27 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
     }
 
     return false;
+}
+
+bool set_scrolling = false;
+
+report_mouse_t pointing_device_task_user(report_mouse_t mouse_report) {
+    if (set_scrolling) {
+        mouse_report.h = mouse_report.x;
+        mouse_report.v = mouse_report.y;
+        mouse_report.x = 0;
+        mouse_report.y = 0;
+    }
+
+    return mouse_report;
+}
+
+bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+    if (keycode == DRAG_SCROLL && record->event.pressed) {
+        set_scrolling = !set_scrolling;
+    }
+
+    return true;
 }
 
 #if defined(ENCODER_MAP_ENABLE)
