@@ -1,0 +1,15 @@
+MOUSEKEY_ENABLE	      = no
+COMMAND_ENABLE        = no
+CONSOLE_ENABLE        = no
+AUDIO_ENABLE          = no
+RGBLIGHT_ENABLE       = no
+COMBO_ENABLE          = yes
+VIA_ENABLE            = yes
+VIAL_ENABLE           = yes
+LTO_ENABLE            = yes
+QMK_SETTINGS          = yes
+TAP_DANCE_ENABLE      = yes
+KEY_OVERRIDE_ENABLE   = no
+RGB_MATRIX_ENABLE     = yes
+RGB_MATRIX_DRIVER     = ws2812
+VIALRGB_ENABLE        = yes
