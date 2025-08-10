@@ -26,32 +26,33 @@
 #include "rgb_matrix.h"
 #include "splitkb/elora/rev1/config.h"
 #include "splitkb/elora/rev1/rev1.h"
+#include "print.h"
+#include "debug.h"
+
 #include QMK_KEYBOARD_H
 
-enum layers {
-    _QWERTY = 0,
-    _NAV,
-    _NUM,
-    _RGB,
+enum custom_keycodes {
+    DRAG_SCROLL = SAFE_RANGE,
 };
+
+enum layers { _QWERTY = 0, _NAV, _NUM, _RGB, _SYM };
 
 // Aliases for readability
 #define NUM MO(_NUM)
 #define NAV MO(_NAV)
 #define NUM MO(_NUM)
 #define RGB MO(_RGB)
+#define SYM MO(_SYM)
 
 #define CTL_ESC MT(MOD_LCTL, KC_ESC)
 #define CTL_QUOT MT(MOD_RCTL, KC_QUOTE)
 #define CTL_MINS MT(MOD_RCTL, KC_MINUS)
 #define ALT_ENT MT(MOD_LALT, KC_ENT)
 
-enum custom_keycodes {
-    DRAG_SCROLL = QK_KB_0,
-};
-
 void pointing_device_init_user(void) {
-    set_auto_mouse_enable(true);
+    // set_auto_mouse_enable(true);
+    debug_enable = true;
+    debug_matrix = true;
 }
 
 // clang-format off
@@ -68,7 +69,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 
     [_NAV] = LAYOUT_myr(
       KC_F1  , KC_F2  , KC_F3  , KC_F4  , KC_F5  , KC_F6      ,           _______, _______,          KC_F7  , KC_F8  , KC_F9  , KC_F10 , KC_F11 , KC_F12,
-      _______, _______, KC_MPLY, _______, _______, _______    ,           _______, _______,          _______, KC_HOME, KC_UP,   KC_END,  KC_PGUP, _______,
+      _______, _______, KC_MPLY, _______, _______, DB_TOGG    ,           _______, _______,          _______, KC_HOME, KC_UP,   KC_END,  KC_PGUP, _______,
       _______, _______, _______, KC_DEL , _______, DRAG_SCROLL,           _______, _______,          KC_BSPC, KC_LEFT, KC_DOWN, KC_RGHT, KC_PGDN, _______,
       _______, KC_APP , _______, _______, _______, MO(_RGB)   , _______ , _______, _______, _______, _______, _______, _______, _______, _______, RGB_TOG,
                                  _______, _______, TO(_QWERTY), MO(_NUM), _______, _______, _______, _______, TO(_NUM), _______,
@@ -88,14 +89,23 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 
     [_RGB] = LAYOUT_myr(
       _______, _______, _______, _______, _______, _______    ,          _______, _______,          RGB_HUD, RGB_HUI    , RGB_SAD, RGB_SAI, RGB_VAD, RGB_VAI,
-      _______, _______, _______, _______, _______, _______    ,          _______, _______,          _______, _______    , _______, _______, _______, _______,
+      _______, QK_BOOT, _______, _______, _______, _______    ,          _______, _______,          _______, _______    , _______, _______, _______, _______,
       _______, _______, _______, _______, _______, _______    ,          _______, _______,          _______, _______    , _______, _______, _______, _______,
       _______, _______, _______, _______, _______, _______    , _______, _______, _______, _______, _______, _______    , _______, _______, _______, _______,
-                                 _______, _______, TO(_QWERTY), _______, _______, _______, _______, _______, TO(_QWERTY), _______,
+                                 _______, _______, TO(_QWERTY), _______, _______, _______, _______, _______, TO(_SYM), _______,
 
       _______, _______, _______, _______,          _______,                   _______, _______, _______, _______,          _______
-    )
-};
+    ),
+    [_SYM] = LAYOUT_myr(
+        _______, _______, _______, _______, _______, _______    ,          _______, _______,          _______, _______    , _______, _______, _______, _______,
+        _______, _______, _______, _______, _______, _______    ,          _______, _______,          _______, _______    , _______, _______, _______, _______,
+        _______, _______, _______, _______, _______, _______    ,          _______, _______,          _______, _______    , _______, _______, _______, _______,
+        _______, _______, _______, _______, _______, _______    , _______, _______, _______, _______, _______, _______    , _______, _______, _______, _______,
+                                   _______, _______, TO(_QWERTY), _______, _______, _______, _______, _______, TO(_QWERTY), _______,
+
+        _______, _______, _______, _______,          _______,                   _______, _______, _______, _______,          _______
+      )
+  };
 // clang-format on
 
 bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
@@ -115,6 +125,9 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
             case _RGB:
                 rgb_matrix_set_color(i, 0, 0, value);
                 break;
+            case _SYM:
+                rgb_matrix_set_color(i, value, value, 0);
+                break;
         }
     }
 
@@ -124,6 +137,8 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
 bool set_scrolling = false;
 
 report_mouse_t pointing_device_task_user(report_mouse_t mouse_report) {
+    uprintf("set_scrolling %d", set_scrolling);
+
     if (set_scrolling) {
         mouse_report.h = mouse_report.x;
         mouse_report.v = mouse_report.y;
@@ -135,8 +150,13 @@ report_mouse_t pointing_device_task_user(report_mouse_t mouse_report) {
 }
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+#ifdef CONSOLE_ENABLE
+    uprintf("KL: kc: 0x%04X, col: %2u, row: %2u, pressed: %u, time: %5u, int: %u, count: %u\n", keycode, record->event.key.col, record->event.key.row, record->event.pressed, record->event.time, record->tap.interrupted, record->tap.count);
+#endif
+
     if (keycode == DRAG_SCROLL && record->event.pressed) {
         set_scrolling = !set_scrolling;
+        // uprintf("set_scrolling %d", set_scrolling);
     }
 
     return true;
@@ -152,8 +172,13 @@ bool encoder_update_user(uint8_t index, bool clockwise) {
 
 const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][2] = {
     [0] = {ENCODER_CCW_CW(KC_LEFT, KC_RIGHT), ENCODER_CCW_CW(KC_LEFT, KC_RIGHT), ENCODER_CCW_CW(KC_LEFT, KC_RIGHT), ENCODER_CCW_CW(KC_VOLD, KC_VOLU), ENCODER_CCW_CW(KC_PGUP, KC_PGDN), ENCODER_CCW_CW(KC_PGUP, KC_PGDN), ENCODER_CCW_CW(KC_PGUP, KC_PGDN), ENCODER_CCW_CW(KC_VOLD, KC_VOLU)},
+
     [1] = {ENCODER_CCW_CW(KC_LEFT, KC_RIGHT), ENCODER_CCW_CW(KC_LEFT, KC_RIGHT), ENCODER_CCW_CW(KC_LEFT, KC_RIGHT), ENCODER_CCW_CW(KC_VOLD, KC_VOLU), ENCODER_CCW_CW(KC_PGUP, KC_PGDN), ENCODER_CCW_CW(KC_PGUP, KC_PGDN), ENCODER_CCW_CW(KC_PGUP, KC_PGDN), ENCODER_CCW_CW(KC_VOLD, KC_VOLU)},
+
     [2] = {ENCODER_CCW_CW(KC_LEFT, KC_RIGHT), ENCODER_CCW_CW(KC_LEFT, KC_RIGHT), ENCODER_CCW_CW(KC_LEFT, KC_RIGHT), ENCODER_CCW_CW(KC_VOLD, KC_VOLU), ENCODER_CCW_CW(KC_PGUP, KC_PGDN), ENCODER_CCW_CW(KC_PGUP, KC_PGDN), ENCODER_CCW_CW(KC_PGUP, KC_PGDN), ENCODER_CCW_CW(KC_VOLD, KC_VOLU)},
+
     [3] = {ENCODER_CCW_CW(KC_LEFT, KC_RIGHT), ENCODER_CCW_CW(KC_LEFT, KC_RIGHT), ENCODER_CCW_CW(KC_LEFT, KC_RIGHT), ENCODER_CCW_CW(KC_VOLD, KC_VOLU), ENCODER_CCW_CW(KC_PGUP, KC_PGDN), ENCODER_CCW_CW(KC_PGUP, KC_PGDN), ENCODER_CCW_CW(KC_PGUP, KC_PGDN), ENCODER_CCW_CW(KC_VOLD, KC_VOLU)},
+
+    [4] = {ENCODER_CCW_CW(KC_LEFT, KC_RIGHT), ENCODER_CCW_CW(KC_LEFT, KC_RIGHT), ENCODER_CCW_CW(KC_LEFT, KC_RIGHT), ENCODER_CCW_CW(KC_VOLD, KC_VOLU), ENCODER_CCW_CW(KC_PGUP, KC_PGDN), ENCODER_CCW_CW(KC_PGUP, KC_PGDN), ENCODER_CCW_CW(KC_PGUP, KC_PGDN), ENCODER_CCW_CW(KC_VOLD, KC_VOLU)},
 };
 #endif
